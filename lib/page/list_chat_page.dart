@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:d_session/d_session.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:ngibrit_in_cs/source/chat_source.dart';
@@ -12,160 +11,140 @@ class ListChatPage extends StatefulWidget {
 }
 
 class _ListChatPageState extends State<ListChatPage> {
-  final edtInput = TextEditingController();
-  late final Stream<QuerySnapshot<Map<String, dynamic>>> streamChats;
+  // [LOGIC] Controller untuk Search
+  final TextEditingController _searchController = TextEditingController();
+  String _searchText = "";
 
-  // String formatTimestamp(Timestamp timestamp) {
-  //   return DateFormat('HH:mm').format(timestamp.toDate());
-  // }
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> streamChats;
 
   @override
   void initState() {
-    streamChats = FirebaseFirestore.instance
-        .collection('CS')
-        // .doc(widget.uid)
-        // .collection('chats')
-        // .orderBy('timestamp', descending: true)
-        .snapshots();
+    // Mengambil data chat room dari koleksi 'CS'
+    streamChats = FirebaseFirestore.instance.collection('CS').snapshots();
     super.initState();
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Gap(20 + MediaQuery.of(context).padding.top),
-            const Text(
-              'Messages',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 24,
-                color: Color(0xff070623),
-              ),
-            ),
-            const Gap(20),
-            Expanded(child: buildList()),
-          ],
-        ),
-      ),
-      bottomNavigationBar: buildBottomNav(),
-    );
-  }
+    // Menggunakan Column agar menyatu dengan layout MainPage
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Gap(20 + MediaQuery.of(context).padding.top),
 
-Widget buildBottomNav() {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 78,
-        width: 200,
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-          color: const Color(0xff070623),
-          borderRadius: BorderRadius.circular(30),
-        ),
-        child: Row(
-          children: [
-            buildItemNav(
-              label: 'Chats',
-              icon: 'assets/ic_chats_on.png',
-              iconOn: 'assets/ic_chats_on.png',
-              hasDot: true,
-              isActive: true,
-              onTap: () {},
+        // 1. HEADER
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            'Messages',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 24,
+              color: Color(0xff070623),
             ),
-            buildItemNav(
-              label: 'Logout',
-              icon: 'assets/ic_logout.png',
-              iconOn: 'assets/ic_logout.png',
-              isActive: false,
-              onTap: () {
-                DSession.removeUser().then((removed) {
-                  if (!removed) return;
-                  Navigator.pushReplacementNamed(context, '/signin');
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildItemNav({
-    required String label,
-    required String icon,
-    required String iconOn,
-    bool isActive = false,
-    required VoidCallback onTap,
-    bool hasDot = false,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          color: Colors.transparent,
-          height: 46,
-          child: Column(
-            children: [
-              Image.asset(isActive ? iconOn : icon, height: 24, width: 24),
-              const Gap(4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(isActive ? 0xffFFBC1C : 0xffFFFFFF),
-                    ),
-                  ),
-                  if (hasDot)
-                    Container(
-                      margin: const EdgeInsets.only(left: 2),
-                      height: 6,
-                      width: 6,
-                      decoration: const BoxDecoration(
-                        color: Color(0xffFF2056),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                ],
-              ),
-            ],
           ),
         ),
-      ),
+        const Gap(20),
+
+        // 2. SEARCH BAR (Desain sama dengan Orders Page)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) {
+              setState(() {
+                _searchText = value.toLowerCase();
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Cari nama user...',
+              hintStyle: const TextStyle(
+                fontSize: 14,
+                color: Color(0xff838384),
+              ),
+              prefixIcon: const Icon(Icons.search, color: Color(0xff838384)),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: const BorderSide(color: Color(0xffE5E7EB)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(30),
+                borderSide: const BorderSide(color: Color(0xff4A1DFF)),
+              ),
+            ),
+          ),
+        ),
+
+        const Gap(20),
+
+        // 3. LIST CHAT
+        Expanded(child: buildList()),
+      ],
     );
   }
 
   Widget buildList() {
-    return StreamBuilder(
+    return StreamBuilder<QuerySnapshot>(
       stream: streamChats,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('Tidak ada pesan'));
         }
-        final list = snapshot.data!.docs;
+
+        final allDocs = snapshot.data!.docs;
+
+        // [LOGIC] Filter Pencarian Client-Side
+        final filteredList = allDocs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          // Ambil data (Handle null dengan string kosong)
+          final name = (data['name'] ?? '').toString().toLowerCase();
+          final email = (data['email'] ?? '').toString().toLowerCase();
+          final phone = (data['phone'] ?? '').toString().toLowerCase();
+
+          // Cek apakah search text ada di salah satu field
+          return name.contains(_searchText) ||
+              email.contains(_searchText) ||
+              phone.contains(_searchText);
+        }).toList();
+
+        if (filteredList.isEmpty) {
+          return const Center(child: Text('Tidak ditemukan chat yang sesuai'));
+        }
+
         return ListView.builder(
-          itemCount: list.length,
-          padding: const EdgeInsets.all(0),
+          // Padding bawah agar tidak tertutup navbar main page
+          padding: const EdgeInsets.only(bottom: 100),
+          itemCount: filteredList.length,
           itemBuilder: (context, index) {
-            Map room = (list[index].data());
-            String uid = room['roomId'];
-            String userName = room['name'];
-            bool newFromUser = room['newFromUser'];
+            Map room = (filteredList[index].data() as Map<String, dynamic>);
+            String uid = room['roomId'] ?? '';
+            String userName = room['name'] ?? 'User';
+            bool newFromUser = room.containsKey('newFromUser')
+                ? room['newFromUser']
+                : false;
+            String lastMsg = room['lastMessage'] ?? '...';
+
             return GestureDetector(
               onTap: () {
+                // [FIX] Panggil setRead saat membuka chat
+                ChatSource.setRead(uid); 
                 ChatSource.openChatRoom(uid, userName).then((value) {
                   Navigator.pushNamed(
                     context,
@@ -175,11 +154,21 @@ Widget buildBottomNav() {
                 });
               },
               child: Container(
-                margin: const EdgeInsets.only(bottom: 18),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                margin: const EdgeInsets.fromLTRB(24, 0, 24, 18),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 18,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -187,7 +176,7 @@ Widget buildBottomNav() {
                     const Gap(14),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment : CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             userName,
@@ -197,9 +186,9 @@ Widget buildBottomNav() {
                               color: Color(0xff070623),
                             ),
                           ),
-                          Gap(2),
+                          const Gap(2),
                           Text(
-                            room['lastMessage'],
+                            lastMsg,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -215,6 +204,15 @@ Widget buildBottomNav() {
                         ],
                       ),
                     ),
+                    if (newFromUser)
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Color(0xffFF2055),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                   ],
                 ),
               ),

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import 'package:ngibrit_in_cs/models/chat.dart';
+import 'package:ngibrit_in_cs/models/order_model.dart';
+import 'package:ngibrit_in_cs/page/order_detail_page.dart';
 import 'package:ngibrit_in_cs/source/chat_source.dart';
 
 class ChattingPage extends StatefulWidget {
@@ -24,6 +26,15 @@ class _ChattingPageState extends State<ChattingPage> {
     return DateFormat('HH:mm').format(timestamp.toDate());
   }
 
+  // Helper Format Currency
+  String formatCurrency(num price) {
+    return NumberFormat.currency(
+      locale: 'id',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    ).format(price);
+  }
+
   @override
   void initState() {
     streamChats = FirebaseFirestore.instance
@@ -33,6 +44,24 @@ class _ChattingPageState extends State<ChattingPage> {
         .orderBy('timestamp', descending: true)
         .snapshots();
     super.initState();
+  }
+
+  void _navigateToDetail(String orderId) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('Orders')
+        .doc(orderId)
+        .get();
+    if (doc.exists) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OrderDetailPage(
+            orderModel: OrderModel.fromJson(doc.data()!, doc.id),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -56,7 +85,7 @@ class _ChattingPageState extends State<ChattingPage> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('Tidak ada pesan'));
         }
 
@@ -77,37 +106,36 @@ class _ChattingPageState extends State<ChattingPage> {
     );
   }
 
+  // [POSISI KIRI] Chat dari User
   Widget chatUser(Chat chat) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start, // Align Left
       children: [
         if (chat.bikeDetail != null)
           Column(
             children: [
               const Gap(16),
+              // Snippet
               buildSnippetBike(chat.bikeDetail!),
-              const Gap(16),
+
+              // [FIX] Tambahkan Garis Putus & Jarak antara Snippet dan Pesan User
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: DottedLine(
-                  dashColor: Color(0xffCECED5),
-                  lineThickness: 1,
-                  dashLength: 6,
-                  dashGapLength: 6,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: DottedLine(dashColor: Color(0xffCECED5)),
               ),
-              const Gap(16),
             ],
           ),
+
+        // Bubble Pesan
         Container(
           margin: const EdgeInsets.only(left: 24, right: 49),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xff070623),
+            color: const Color(0xff070623), // Hitam/Biru Tua (Style User)
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start, // Text Align Left
             children: [
               Text(
                 chat.message,
@@ -131,9 +159,12 @@ class _ChattingPageState extends State<ChattingPage> {
           ),
         ),
         const Gap(12),
+        // Info User (Avatar & Nama)
         Row(
           children: [
             const Gap(24),
+            Image.asset('assets/chat_profile.png', height: 40, width: 40),
+            const Gap(8),
             Text(
               widget.userName,
               style: const TextStyle(
@@ -142,8 +173,6 @@ class _ChattingPageState extends State<ChattingPage> {
                 color: Color(0xff070623),
               ),
             ),
-            const Gap(8),
-            Image.asset('assets/chat_profile.png', height: 40, width: 40),
           ],
         ),
         const Gap(20),
@@ -151,19 +180,44 @@ class _ChattingPageState extends State<ChattingPage> {
     );
   }
 
+  // [POSISI KANAN] Chat dari CS
   Widget chatCS(Chat chat) {
+    bool hasOrderSnippet =
+        chat.bikeDetail != null &&
+        (chat.bikeDetail!['isOrderSnapshot'] ?? false);
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.end, // Align Right
       children: [
+        if (chat.bikeDetail != null)
+          Column(
+            children: [
+              const Gap(16),
+              // Snippet
+              buildSnippetBike(chat.bikeDetail!),
+
+              // [FIX] Garis Putus untuk Snippet CS juga
+              if (hasOrderSnippet)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  child: DottedLine(dashColor: Color(0xffCECED5)),
+                ),
+            ],
+          ),
+
+        // Bubble Pesan
         Container(
           margin: const EdgeInsets.only(left: 49, right: 24),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+            ],
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.end, // Text Align Right
             children: [
               Text(
                 chat.message,
@@ -187,9 +241,19 @@ class _ChattingPageState extends State<ChattingPage> {
           ),
         ),
         const Gap(12),
+        // Info CS (Nama & Logo)
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            const Text(
+              'CS Ngibritin',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Color(0xff070623),
+              ),
+            ),
+            const Gap(8),
             Container(
               height: 40,
               width: 40,
@@ -199,15 +263,6 @@ class _ChattingPageState extends State<ChattingPage> {
               ),
               padding: const EdgeInsets.all(4),
               child: Image.asset('assets/logo-ngibritin.png'),
-            ),
-            const Gap(8),
-            const Text(
-              'CS Ngibritin',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: Color(0xff070623),
-              ),
             ),
             const Gap(24),
           ],
@@ -250,7 +305,6 @@ class _ChattingPageState extends State<ChattingPage> {
               ),
             ),
           ),
-
           if (edtInput.text.trim().isNotEmpty)
             IconButton(
               onPressed: () {
@@ -261,7 +315,6 @@ class _ChattingPageState extends State<ChattingPage> {
                   senderId: 'cs',
                   bikeDetail: null,
                 );
-
                 ChatSource.send(chat, widget.uid).then((value) {
                   edtInput.clear();
                   setState(() {});
@@ -273,7 +326,6 @@ class _ChattingPageState extends State<ChattingPage> {
       ),
     );
   }
-
 
   Widget buildHeader() {
     return Padding(
@@ -323,64 +375,181 @@ class _ChattingPageState extends State<ChattingPage> {
     );
   }
 
+  // [UI FIX] Widget Snippet
   Widget buildSnippetBike(Map bike) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      height: 98,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          ExtendedImage.network(
-            bike['image'],
-            width: 90,
-            height: 70,
-            fit: BoxFit.contain,
-          ),
-          const Gap(10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    bool isOrderSnapshot = bike['isOrderSnapshot'] ?? false;
+
+    String title = isOrderSnapshot
+        ? (bike['bikeName'] ?? 'Motor')
+        : (bike['name'] ?? 'Motor');
+    String imageUrl = isOrderSnapshot
+        ? (bike['bikeImage'] ?? '')
+        : (bike['image'] ?? '');
+    String status = isOrderSnapshot
+        ? (bike['status'] ?? '-')
+        : (bike['category'] ?? '-');
+    String orderId = isOrderSnapshot
+        ? (bike['orderId'] ?? '')
+        : (bike['id'] ?? '');
+    num totalPrice = isOrderSnapshot ? (bike['totalPrice'] ?? 0) : 0;
+
+    String safeOrderId = (orderId.length >= 5)
+        ? orderId.substring(0, 5).toUpperCase()
+        : orderId.toUpperCase();
+    String dateRange = isOrderSnapshot
+        ? '${bike['startDate']} - ${bike['endDate']}'
+        : '';
+
+    Color statusColor = const Color(0xff838384);
+    Color statusBg = const Color(0xffF3F4F6);
+    if (status == 'Dikirim') {
+      statusColor = const Color(0xffFFBC1C);
+      statusBg = const Color(0xffFFF8E1);
+    } else if (status == 'Berlangsung') {
+      statusColor = const Color(0xff4A1DFF);
+      statusBg = const Color(0xffEFEEF7);
+    } else if (status == 'Selesai') {
+      statusColor = const Color(0xff1AC75A);
+      statusBg = const Color(0xffE8F9EE);
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (orderId.isNotEmpty && isOrderSnapshot) {
+          _navigateToDetail(orderId);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          border: Border.all(color: const Color(0xffE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  bike['name'],
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xff070623),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ExtendedImage.network(
+                    imageUrl,
+                    width: 70,
+                    height: 60,
+                    fit: BoxFit.contain,
+                    cache: true,
+                    loadStateChanged: (state) =>
+                        state.extendedImageLoadState == LoadState.failed
+                        ? const Icon(Icons.broken_image, color: Colors.grey)
+                        : null,
                   ),
                 ),
-                Text(
-                  bike['category'] ?? '-',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: Color(0xff838384),
+                const Gap(12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xff070623),
+                        ),
+                      ),
+                      const Gap(4),
+                      if (isOrderSnapshot) ...[
+                        Text(
+                          "ID: $safeOrderId",
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xff838384),
+                          ),
+                        ),
+                        Text(
+                          dateRange,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xff838384),
+                          ),
+                        ),
+                      ] else
+                        Text(
+                          status,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xff838384),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+
+                // Dummy UI "Detail" untuk snippet motor dari user
+                if (!isOrderSnapshot)
+                  const Text(
+                    "Detail",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xff4A1DFF),
+                      decoration: TextDecoration.underline,
+                      decorationColor: Color(0xff4A1DFF),
+                    ),
+                  ),
               ],
             ),
-          ),
-          GestureDetector(
-            onTap: () {
-              Navigator.pushNamed(context, '/detail', arguments: bike['id']);
-            },
-            child: const Text(
-              'Detail',
-              style: TextStyle(
-                decoration: TextDecoration.underline,
-                decorationThickness: 1,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xff4A1DFF),
+
+            if (isOrderSnapshot) ...[
+              const Gap(12),
+              const Divider(height: 1, color: Color(0xffF3F4F6)),
+              const Gap(8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Total: ${formatCurrency(totalPrice)}",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xff070623),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-        ],
+            ],
+          ],
+        ),
       ),
     );
   }

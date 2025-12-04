@@ -1,0 +1,886 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:extended_image/extended_image.dart';
+import 'package:flutter/material.dart';
+import 'package:gap/gap.dart';
+import 'package:intl/intl.dart';
+import 'package:ngibrit_in_cs/common/info.dart';
+import 'package:ngibrit_in_cs/models/chat.dart';
+import 'package:ngibrit_in_cs/models/order_model.dart';
+import 'package:ngibrit_in_cs/source/chat_source.dart';
+import 'package:ngibrit_in_cs/source/order_source.dart';
+
+class OrderDetailPage extends StatefulWidget {
+  const OrderDetailPage({super.key, required this.orderModel});
+  final OrderModel orderModel;
+
+  @override
+  State<OrderDetailPage> createState() => _OrderDetailPageState();
+}
+
+class _OrderDetailPageState extends State<OrderDetailPage> {
+  late OrderModel order;
+
+  @override
+  void initState() {
+    super.initState();
+    order = widget.orderModel;
+  }
+
+  void _refreshData() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('Orders')
+        .doc(order.id)
+        .get();
+    if (doc.exists) {
+      setState(() {
+        order = OrderModel.fromJson(doc.data()!, doc.id);
+      });
+    }
+  }
+
+  // --- LOGIC: Validasi Tanggal ---
+  bool _isReturnable() {
+    try {
+      final endDate = DateFormat('dd MMM yyyy').parse(order.endDate);
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final end = DateTime(endDate.year, endDate.month, endDate.day);
+
+      // Boleh dikembalikan jika Hari Ini >= Tanggal Selesai
+      return today.isAtSameMomentAs(end) || today.isAfter(end);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // --- LOGIC: Konfirmasi Pesanan (Selesai) ---
+  void onConfirmOrder() async {
+    // 1. Validasi Tanggal
+    if (!_isReturnable()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Tanggal penyewaan belum berakhir!"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // 2. Proses Update
+    Info.showLoading(context, message: "Menyelesaikan pesanan...");
+    bool success = await OrderSource.confirmReturn(order.id);
+    Info.hideLoading();
+
+    if (success) {
+      Info.success("Pesanan berhasil diselesaikan!");
+      _refreshData();
+    } else {
+      Info.error("Gagal update status");
+    }
+  }
+
+  // --- LOGIC: Smart Chat (Hubungi Customer) ---
+  void onContactCustomer() async {
+    Info.showLoading(context, message: 'Menghubungkan...');
+    try {
+      String accountName = order
+          .userName; // Default fallback (jika data akun tidak ditemukan sama sekali)
+
+      // 1. Cek Riwayat Chat di Collection 'CS'
+      final userChatDoc = await FirebaseFirestore.instance
+          .collection('CS')
+          .doc(order.userId)
+          .get();
+
+      if (userChatDoc.exists) {
+        // Jika sudah ada riwayat chat, gunakan nama yang konsisten dari sana
+        accountName = userChatDoc.data()?['name'] ?? order.userName;
+      } else {
+        // 2. [FIX] Jika belum ada riwayat, ambil nama ASLI dari Collection 'User'
+        final userAccountDoc = await FirebaseFirestore.instance
+            .collection(
+              'User',
+            ) // [FIX] Nama Collection sesuai screenshot Firestore Anda
+            .doc(order.userId)
+            .get();
+
+        if (userAccountDoc.exists) {
+          // Ambil nama dari field 'name' di dokumen User
+          accountName = userAccountDoc.data()?['name'] ?? order.userName;
+        }
+      }
+
+      // 3. Buka/Update Room dengan Nama Akun Asli
+      // Ini akan membuat dokumen baru di 'CS' dengan nama yang benar jika belum ada
+      await ChatSource.openChatRoom(order.userId, accountName);
+
+      // 4. Siapkan Snapshot Data
+      final snapshotData = {
+        'orderId': order.id,
+        'bikeName': order.bikeSnapshot['name'],
+        'bikeImage': order.bikeSnapshot['image'],
+        'userName': order
+            .userName, // Di dalam kartu tetap tampilkan nama penyewa (konteks order)
+        'totalPrice': order.totalPrice,
+        'status': order.status,
+        'startDate': order.startDate,
+        'endDate': order.endDate,
+        'isOrderSnapshot': true,
+      };
+
+      // 5. Kirim Pesan dengan Sapaan Nama Akun Asli
+      Chat chat = Chat(
+        roomId: order.userId,
+        message:
+            "Halo Kak $accountName, saya ingin menanyakan mengenai pesanan ini.",
+        receiverId: order.userId,
+        senderId: 'cs',
+        bikeDetail: snapshotData,
+      );
+
+      await ChatSource.send(chat, order.userId);
+
+      Info.hideLoading();
+
+      // 6. Navigasi ke Chat dengan Nama Akun Asli di Header
+      Navigator.pushNamed(
+        context,
+        '/chatting',
+        arguments: {'uid': order.userId, 'userName': accountName},
+      );
+    } catch (e) {
+      Info.hideLoading();
+      Info.error("Gagal membuka chat: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xffF8F8FA),
+
+      // 1. HEADER (Sesuai Desain Booking)
+      appBar: AppBar(
+        toolbarHeight: 80,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      color: Color(0xff070623),
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+              const Text(
+                'Pesanan', // Teks Header "Pesanan"
+                style: TextStyle(
+                  color: Color(0xff070623),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        children: [
+          _buildCard1_MainDetail(),
+          const Gap(20),
+          _buildCard2_StatusTimeline(),
+          const Gap(20),
+          _buildCard3_Insurance(),
+          const Gap(20),
+          _buildCard4_PriceDetails(),
+          const Gap(20),
+          _buildCard5_PaymentMethod(),
+          const Gap(30),
+
+          // BUTTON SECTION
+          _buildActionButtons(),
+          const Gap(30),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET CARDS ---
+
+  // CARD 1: Detail Utama (Warna Header dinamis)
+  Widget _buildCard1_MainDetail() {
+    Color headerColor = Colors.grey;
+    String headerText = "Sedang Dikirim";
+    if (order.status == 'Berlangsung') {
+      headerColor = const Color(0xff070623);
+      headerText = "Sedang Berlangsung";
+    } else if (order.status == 'Selesai') {
+      headerColor = const Color(0xff1AC75A); // Hijau
+      headerText = "Pesanan Selesai";
+    } else if (order.status == 'Dikirim') {
+      headerColor = Colors.orange;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Warna
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: headerColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+            ),
+            child: Text(
+              headerText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Info Motor
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: ExtendedImage.network(
+                        order.bikeSnapshot['image'] ?? '',
+                        width: 60,
+                        height: 50,
+                        fit: BoxFit.contain,
+                        cache: true,
+                      ),
+                    ),
+                    const Gap(12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.bikeSnapshot['name'],
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: Color(0xff070623),
+                            ),
+                          ),
+                          Text(
+                            order.agency,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xff838384),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(16),
+
+                // Alert
+                Row(
+                  children: [
+                    const Icon(Icons.error, color: Color(0xffFF2055), size: 18),
+                    const Gap(8),
+                    const Text(
+                      "Tidak bisa reschedule",
+                      style: TextStyle(fontSize: 12, color: Color(0xff838384)),
+                    ),
+                  ],
+                ),
+                const Gap(20),
+
+                // Data Penyewa (Nama dari Input Booking)
+                const Text(
+                  "Data Penyewa",
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xff070623),
+                  ),
+                ),
+                const Gap(8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xffEFEEF7)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.userName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xff070623),
+                        ),
+                      ),
+                      const Gap(4),
+                      Text(
+                        "${order.userEmail} • ${order.userPhone}",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xff838384),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(20),
+
+                _buildLabelValue("Lokasi Pengambilan *", order.pickupLocation),
+                const Gap(16),
+                _buildLabelValue("Lokasi Pengembalian *", order.returnLocation),
+                const Gap(16),
+
+                RichText(
+                  text: const TextSpan(
+                    text: "Durasi Sewa",
+                    style: TextStyle(
+                      color: Color(0xff070623),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFamily: 'Poppins',
+                    ),
+                    children: [
+                      TextSpan(
+                        text: " *",
+                        style: TextStyle(color: Color(0xffFF2055)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Pengambilan :",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xff838384),
+                          ),
+                        ),
+                        Text(
+                          order.startDate,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xff070623),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          "Pengembalian :",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xff838384),
+                          ),
+                        ),
+                        Text(
+                          order.endDate,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xff070623),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CARD 2: Timeline Status
+  Widget _buildCard2_StatusTimeline() {
+    int level = 1;
+    if (order.status == 'Berlangsung') level = 2;
+    if (order.status == 'Selesai') level = 3;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Status Pesanan",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Color(0xff070623),
+            ),
+          ),
+          const Gap(20),
+          Row(
+            children: [
+              _buildTimelineStep(
+                icon: Icons.local_shipping_outlined,
+                label: "Sedang\nDikirim",
+                isActive: level >= 1,
+                isCurrent: level == 1,
+                isCheck: false,
+              ),
+              Expanded(
+                child: Container(
+                  height: 2,
+                  color: level >= 2
+                      ? const Color(0xffE5E7EB)
+                      : const Color(0xffF3F4F6),
+                ),
+              ),
+              _buildTimelineStep(
+                icon: Icons.calendar_today_outlined,
+                label: "Sedang\nBerlangsung",
+                isActive: level >= 2,
+                isCurrent: level == 2,
+                isCheck: false,
+              ),
+              Expanded(
+                child: Container(
+                  height: 2,
+                  color: level >= 3
+                      ? const Color(0xffE5E7EB)
+                      : const Color(0xffF3F4F6),
+                ),
+              ),
+              _buildTimelineStep(
+                icon: Icons.check,
+                label: "Pesanan\nSelesai",
+                isActive: level >= 3,
+                isCurrent: level == 3,
+                isCheck: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineStep({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required bool isCurrent,
+    required bool isCheck,
+  }) {
+    Color circleColor = const Color(0xffF3F4F6);
+    Color iconColor = const Color(0xff9CA3AF);
+    if (isActive) {
+      if (isCurrent || (isCheck && isActive)) {
+        circleColor = const Color(0xffFFBC1C);
+        iconColor = const Color(0xff070623);
+      } else {
+        circleColor = const Color(0xffE5E7EB);
+        iconColor = const Color(0xff6B7280);
+      }
+    }
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
+          child: Icon(icon, color: iconColor, size: 20),
+        ),
+        const Gap(8),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 10,
+            color: isActive ? const Color(0xff070623) : const Color(0xff9CA3AF),
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // CARD 3: Asuransi
+  Widget _buildCard3_Insurance() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Asuransi",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Color(0xff070623),
+            ),
+          ),
+          const Gap(12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.verified_user,
+                    color: Color(0xff4A1DFF),
+                    size: 20,
+                  ),
+                  const Gap(8),
+                  Text(
+                    order.insuranceName,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xff070623),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                NumberFormat.currency(
+                  locale: 'id',
+                  symbol: 'Rp ',
+                  decimalDigits: 0,
+                ).format(order.insurancePrice),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xff4A1DFF),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CARD 4: Harga
+  Widget _buildCard4_PriceDetails() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Rincian Harga",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Color(0xff070623),
+            ),
+          ),
+          const Gap(16),
+          _buildPriceRow("Harga Sewa (${order.duration} hari)", order.subTotal),
+          _buildPriceRow("Asuransi", order.insurancePrice),
+          _buildPriceRow("Pajak 11%", order.tax),
+          const Divider(height: 24, color: Color(0xffEFEEF7)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Total Harga",
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: Color(0xff070623),
+                ),
+              ),
+              Text(
+                NumberFormat.currency(
+                  locale: 'id',
+                  symbol: 'Rp ',
+                  decimalDigits: 0,
+                ).format(order.totalPrice),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: Color(0xff4A1DFF),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CARD 5: Pembayaran
+  Widget _buildCard5_PaymentMethod() {
+    String method = order.paymentMethod.toLowerCase();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Metode Pembayaran",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Color(0xff070623),
+            ),
+          ),
+          const Gap(16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildPaymentIcon(
+                'assets/ic_wallet.png',
+                'My Wallet',
+                method.contains('wallet'),
+              ),
+              _buildPaymentIcon(
+                'assets/cards.png',
+                'Transfer',
+                method.contains('transfer'),
+              ),
+              _buildPaymentIcon(
+                'assets/cash.png',
+                'Cash',
+                method.contains('cash'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentIcon(String asset, String label, bool isSelected) {
+    return Container(
+      width: 90,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xffF3E8FF) : const Color(0xffF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected ? const Color(0xff4A1DFF) : Colors.transparent,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          Image.asset(
+            asset,
+            width: 24,
+            height: 24,
+            color: isSelected ? const Color(0xff4A1DFF) : Colors.grey,
+          ),
+          const Gap(8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: isSelected ? const Color(0xff4A1DFF) : Colors.grey,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- BUTTONS SECTION ---
+  Widget _buildActionButtons() {
+    // 1. Tombol Hubungi Customer (Selalu Ada)
+    Widget contactButton = Material(
+      color: const Color(0xffFFBC1C), // Kuning Primary
+      borderRadius: BorderRadius.circular(50),
+      child: InkWell(
+        onTap: onContactCustomer,
+        borderRadius: BorderRadius.circular(50),
+        child: Container(
+          height: 52,
+          alignment: Alignment.center,
+          child: const Text(
+            "Hubungi Customer",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // 2. Tombol Konfirmasi Pesanan (Hanya jika Berlangsung)
+    Widget confirmButton = Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(50),
+      child: InkWell(
+        onTap: onConfirmOrder,
+        borderRadius: BorderRadius.circular(50),
+        child: Container(
+          height: 52,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(
+              color: const Color(0xff4A1DFF),
+              width: 1.5,
+            ), // Border Ungu
+          ),
+          child: const Text(
+            "Konfirmasi Pengembalian",
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              color: Color(0xff4A1DFF),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (order.status == 'Berlangsung') {
+      return Column(
+        children: [
+          contactButton,
+          const Gap(12),
+          confirmButton, // Tombol Konfirmasi hanya muncul di sini
+        ],
+      );
+    } else {
+      // Status 'Dikirim' atau 'Selesai' hanya tampil tombol Hubungi
+      return contactButton;
+    }
+  }
+
+  // Helpers
+  Widget _buildLabelValue(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            text: label.replaceAll('*', ''),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xff838384),
+              fontFamily: 'Poppins',
+            ),
+            children: const [
+              TextSpan(
+                text: " *",
+                style: TextStyle(color: Color(0xffFF2055)),
+              ),
+            ],
+          ),
+        ),
+        const Gap(4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xff070623),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPriceRow(String label, num value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xff838384)),
+          ),
+          Text(
+            NumberFormat.currency(
+              locale: 'id',
+              symbol: 'Rp ',
+              decimalDigits: 0,
+            ).format(value),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xff070623),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

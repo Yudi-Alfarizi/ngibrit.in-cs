@@ -3,27 +3,22 @@ import 'package:ngibrit_in_cs/models/chat.dart';
 
 class ChatSource {
   static Future<void> openChatRoom(String uid, String userName) async {
-    final doc = await FirebaseFirestore.instance
-        .collection('CS')
-        .doc(uid)
-        .get();
+    final doc = await FirebaseFirestore.instance.collection('CS').doc(uid).get();
 
     if (doc.exists) {
-      // [FIX] Jangan update 'name' jika room sudah ada.
-      // Kita hanya update status notifikasi.
       await FirebaseFirestore.instance.collection('CS').doc(uid).update({
         'newFromCS': false,
       });
       return;
     }
 
-    // First time chat room
     await FirebaseFirestore.instance.collection('CS').doc(uid).set({
       'roomId': uid,
-      'name': userName, // Nama akun user (dikirim pertama kali user chat)
+      'name': userName,
       'lastMessage': 'Welcome to Ngibrit.in',
       'newFromUser': false,
       'newFromCS': true,
+      'lastTime': FieldValue.serverTimestamp(),
     });
 
     await FirebaseFirestore.instance
@@ -39,19 +34,19 @@ class ChatSource {
           'timestamp': FieldValue.serverTimestamp(),
         });
   }
-  // [FIX] Tambahkan method setRead
+
   static Future<void> setRead(String uid) async {
     await FirebaseFirestore.instance.collection('CS').doc(uid).update({
-      'newFromUser': false, // Tandai pesan dari user sudah dibaca
+      'newFromUser': false,
     });
   }
-  
+
   static Future<void> send(Chat chat, String uid) async {
     await FirebaseFirestore.instance.collection('CS').doc(uid).update({
       'lastMessage': chat.message,
-      // [FIX] Update status agar naik ke atas list chat
       'newFromCS': true,
       'newFromUser': false,
+      'lastTime': FieldValue.serverTimestamp(),
     });
 
     await FirebaseFirestore.instance

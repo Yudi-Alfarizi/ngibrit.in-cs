@@ -2,7 +2,7 @@ import 'package:d_session/d_session.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:ngibrit_in_cs/page/chatting_page.dart';
-import 'package:ngibrit_in_cs/page/main_page.dart'; // [FIX] Import MainPage
+import 'package:ngibrit_in_cs/page/main_page.dart'; 
 import 'package:ngibrit_in_cs/page/signin_page.dart';
 import 'package:ngibrit_in_cs/page/splash_screen.dart';
 import 'firebase_options.dart';
@@ -31,13 +31,13 @@ class MyApp extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const CircularProgressIndicator();
           }
-          // Jika sudah login, masuk ke MainPage (bukan ListChatPage lagi)
+
           if (snapshot.data == null) return const SplashScreen();
           return const MainPage();
         },
       ),
       routes: {
-        '/main': (context) => const MainPage(), // [FIX] Rute baru
+        '/main': (context) => const MainPage(),
         '/signin': (context) => const SigninPage(),
         '/chatting': (context) {
           Map data = ModalRoute.of(context)!.settings.arguments as Map;

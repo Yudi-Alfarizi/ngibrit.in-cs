@@ -11,7 +11,6 @@ class ListChatPage extends StatefulWidget {
 }
 
 class _ListChatPageState extends State<ListChatPage> {
-  // [LOGIC] Controller untuk Search
   final TextEditingController _searchController = TextEditingController();
   String _searchText = "";
 
@@ -19,8 +18,10 @@ class _ListChatPageState extends State<ListChatPage> {
 
   @override
   void initState() {
-    // Mengambil data chat room dari koleksi 'CS'
-    streamChats = FirebaseFirestore.instance.collection('CS').snapshots();
+    streamChats = FirebaseFirestore.instance
+        .collection('CS')
+        .orderBy('lastTime', descending: true)
+        .snapshots();
     super.initState();
   }
 
@@ -32,13 +33,11 @@ class _ListChatPageState extends State<ListChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Menggunakan Column agar menyatu dengan layout MainPage
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Gap(20 + MediaQuery.of(context).padding.top),
 
-        // 1. HEADER
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 24),
           child: Text(
@@ -52,7 +51,6 @@ class _ListChatPageState extends State<ListChatPage> {
         ),
         const Gap(20),
 
-        // 2. SEARCH BAR (Desain sama dengan Orders Page)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: TextField(
@@ -90,7 +88,6 @@ class _ListChatPageState extends State<ListChatPage> {
 
         const Gap(20),
 
-        // 3. LIST CHAT
         Expanded(child: buildList()),
       ],
     );
@@ -108,17 +105,13 @@ class _ListChatPageState extends State<ListChatPage> {
         }
 
         final allDocs = snapshot.data!.docs;
-
-        // [LOGIC] Filter Pencarian Client-Side
         final filteredList = allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
 
-          // Ambil data (Handle null dengan string kosong)
           final name = (data['name'] ?? '').toString().toLowerCase();
           final email = (data['email'] ?? '').toString().toLowerCase();
           final phone = (data['phone'] ?? '').toString().toLowerCase();
 
-          // Cek apakah search text ada di salah satu field
           return name.contains(_searchText) ||
               email.contains(_searchText) ||
               phone.contains(_searchText);
@@ -129,7 +122,6 @@ class _ListChatPageState extends State<ListChatPage> {
         }
 
         return ListView.builder(
-          // Padding bawah agar tidak tertutup navbar main page
           padding: const EdgeInsets.only(bottom: 100),
           itemCount: filteredList.length,
           itemBuilder: (context, index) {
@@ -139,12 +131,12 @@ class _ListChatPageState extends State<ListChatPage> {
             bool newFromUser = room.containsKey('newFromUser')
                 ? room['newFromUser']
                 : false;
+
             String lastMsg = room['lastMessage'] ?? '...';
 
             return GestureDetector(
               onTap: () {
-                // [FIX] Panggil setRead saat membuka chat
-                ChatSource.setRead(uid); 
+                ChatSource.setRead(uid);
                 ChatSource.openChatRoom(uid, userName).then((value) {
                   Navigator.pushNamed(
                     context,

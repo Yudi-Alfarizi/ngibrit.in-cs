@@ -83,7 +83,7 @@ class _InputState extends State<Input> {
                 child: Padding(
                   padding: const EdgeInsets.all(10),
                   child: Image.asset(
-                    _isObscure? 'assets/eye_hidden.png': 'assets/eye.png', // mata terbuka
+                    _isObscure? 'assets/eye_hidden.png': 'assets/eye.png',
                     width: 22,
                     height: 22,
                   ),

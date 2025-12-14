@@ -11,7 +11,6 @@ class CSOrderCard extends StatelessWidget {
   final OrderModel order;
   final VoidCallback onTap;
 
-  // Helper untuk format tanggal pesanan dibuat (createdAt)
   String _formatCreatedDate(Timestamp timestamp) {
     try {
       DateTime date = timestamp.toDate();
@@ -85,34 +84,33 @@ class CSOrderCard extends StatelessWidget {
                       ),
                       const Gap(4),
                       Text(
-                        'Penyewa: ${order.userName}',
+                        'Penyewa : ${order.userName}',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: Color(0xff838384),
                         ),
                       ),
                       Text(
-                        'No: ${order.id.substring(0, 8).toUpperCase()}',
+                        'No : ${order.id.substring(0, 8).toUpperCase()}',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: Color(0xff838384),
                         ),
                       ),
-                      // [FIX A] Menampilkan Tanggal Pesanan (Created At)
+
                       Text(
-                        'Tanggal Pesanan: ${_formatCreatedDate(order.createdAt)}',
+                        'Tanggal Pesanan : ${_formatCreatedDate(order.createdAt)}',
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           color: Color(0xff838384),
                         ),
                       ),
                       const Gap(4),
                       Text(
-                        '${order.startDate} - ${order.endDate}',
+                        'Sewa : ${order.startDate} - ${order.endDate}',
                         style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xff070623),
+                          fontSize: 11,
+                          color: Color(0xff838384),
                         ),
                       ),
                     ],
@@ -130,7 +128,6 @@ class CSOrderCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // [FIX B] Label Total Harga di atas nominal
                     const Text(
                       'Total Harga',
                       style: TextStyle(
@@ -142,10 +139,10 @@ class CSOrderCard extends StatelessWidget {
                     const Gap(2),
                     Row(
                       children: [
-                        const Icon(
-                          Icons.wallet,
-                          size: 16,
-                          color: Color(0xff6B7280),
+                        Image.asset(
+                          'assets/ic_wallet.png',
+                          width: 24,
+                          height: 24,
                         ),
                         const Gap(6),
                         Text(

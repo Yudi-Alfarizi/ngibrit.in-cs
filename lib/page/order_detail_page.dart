@@ -38,7 +38,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     }
   }
 
-  // --- LOGIC: Validasi Tanggal ---
   bool _isReturnable() {
     try {
       final endDate = DateFormat('dd MMM yyyy').parse(order.endDate);
@@ -46,16 +45,13 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       final today = DateTime(now.year, now.month, now.day);
       final end = DateTime(endDate.year, endDate.month, endDate.day);
 
-      // Boleh dikembalikan jika Hari Ini >= Tanggal Selesai
       return today.isAtSameMomentAs(end) || today.isAfter(end);
     } catch (e) {
       return false;
     }
   }
 
-  // --- LOGIC: Konfirmasi Pesanan (Selesai) ---
   void onConfirmOrder() async {
-    // 1. Validasi Tanggal
     if (!_isReturnable()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -66,7 +62,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       return;
     }
 
-    // 2. Proses Update
     Info.showLoading(context, message: "Menyelesaikan pesanan...");
     bool success = await OrderSource.confirmReturn(order.id);
     Info.hideLoading();
@@ -79,48 +74,40 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     }
   }
 
-  // --- LOGIC: Smart Chat (Hubungi Customer) ---
   void onContactCustomer() async {
     Info.showLoading(context, message: 'Menghubungkan...');
     try {
       String accountName = order
-          .userName; // Default fallback (jika data akun tidak ditemukan sama sekali)
+          .userName;
 
-      // 1. Cek Riwayat Chat di Collection 'CS'
       final userChatDoc = await FirebaseFirestore.instance
           .collection('CS')
           .doc(order.userId)
           .get();
 
       if (userChatDoc.exists) {
-        // Jika sudah ada riwayat chat, gunakan nama yang konsisten dari sana
         accountName = userChatDoc.data()?['name'] ?? order.userName;
       } else {
-        // 2. [FIX] Jika belum ada riwayat, ambil nama ASLI dari Collection 'User'
         final userAccountDoc = await FirebaseFirestore.instance
             .collection(
               'User',
-            ) // [FIX] Nama Collection sesuai screenshot Firestore Anda
+            )
             .doc(order.userId)
             .get();
 
         if (userAccountDoc.exists) {
-          // Ambil nama dari field 'name' di dokumen User
           accountName = userAccountDoc.data()?['name'] ?? order.userName;
         }
       }
 
-      // 3. Buka/Update Room dengan Nama Akun Asli
-      // Ini akan membuat dokumen baru di 'CS' dengan nama yang benar jika belum ada
       await ChatSource.openChatRoom(order.userId, accountName);
 
-      // 4. Siapkan Snapshot Data
       final snapshotData = {
         'orderId': order.id,
         'bikeName': order.bikeSnapshot['name'],
         'bikeImage': order.bikeSnapshot['image'],
         'userName': order
-            .userName, // Di dalam kartu tetap tampilkan nama penyewa (konteks order)
+            .userName,
         'totalPrice': order.totalPrice,
         'status': order.status,
         'startDate': order.startDate,
@@ -128,7 +115,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         'isOrderSnapshot': true,
       };
 
-      // 5. Kirim Pesan dengan Sapaan Nama Akun Asli
       Chat chat = Chat(
         roomId: order.userId,
         message:
@@ -142,7 +128,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
       Info.hideLoading();
 
-      // 6. Navigasi ke Chat dengan Nama Akun Asli di Header
       Navigator.pushNamed(
         context,
         '/chatting',
@@ -157,12 +142,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffF8F8FA),
-
-      // 1. HEADER (Sesuai Desain Booking)
       appBar: AppBar(
         toolbarHeight: 80,
-        backgroundColor: Colors.white,
+        backgroundColor: Color(0xffEFEFF0),
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -199,7 +183,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ),
               ),
               const Text(
-                'Pesanan', // Teks Header "Pesanan"
+                'Pesanan',
                 style: TextStyle(
                   color: Color(0xff070623),
                   fontWeight: FontWeight.w700,
@@ -225,7 +209,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           _buildCard5_PaymentMethod(),
           const Gap(30),
 
-          // BUTTON SECTION
           _buildActionButtons(),
           const Gap(30),
         ],
@@ -233,9 +216,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  // --- WIDGET CARDS ---
-
-  // CARD 1: Detail Utama (Warna Header dinamis)
   Widget _buildCard1_MainDetail() {
     Color headerColor = Colors.grey;
     String headerText = "Sedang Dikirim";
@@ -243,7 +223,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       headerColor = const Color(0xff070623);
       headerText = "Sedang Berlangsung";
     } else if (order.status == 'Selesai') {
-      headerColor = const Color(0xff1AC75A); // Hijau
+      headerColor = const Color(0xff1AC75A);
       headerText = "Pesanan Selesai";
     } else if (order.status == 'Dikirim') {
       headerColor = Colors.orange;
@@ -257,7 +237,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Warna
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -282,7 +261,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Info Motor
                 Row(
                   children: [
                     ClipRRect(
@@ -322,7 +300,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ),
                 const Gap(16),
 
-                // Alert
                 Row(
                   children: [
                     const Icon(Icons.error, color: Color(0xffFF2055), size: 18),
@@ -335,7 +312,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ),
                 const Gap(20),
 
-                // Data Penyewa (Nama dari Input Booking)
                 const Text(
                   "Data Penyewa",
                   style: TextStyle(
@@ -452,7 +428,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  // CARD 2: Timeline Status
   Widget _buildCard2_StatusTimeline() {
     int level = 1;
     if (order.status == 'Berlangsung') level = 2;
@@ -562,7 +537,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  // CARD 3: Asuransi
   Widget _buildCard3_Insurance() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -622,7 +596,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  // CARD 4: Harga
   Widget _buildCard4_PriceDetails() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -676,7 +649,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  // CARD 5: Pembayaran
   Widget _buildCard5_PaymentMethod() {
     String method = order.paymentMethod.toLowerCase();
     return Container(
@@ -756,11 +728,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  // --- BUTTONS SECTION ---
   Widget _buildActionButtons() {
-    // 1. Tombol Hubungi Customer (Selalu Ada)
     Widget contactButton = Material(
-      color: const Color(0xffFFBC1C), // Kuning Primary
+      color: const Color(0xffFFBC1C),
       borderRadius: BorderRadius.circular(50),
       child: InkWell(
         onTap: onContactCustomer,
@@ -780,7 +750,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       ),
     );
 
-    // 2. Tombol Konfirmasi Pesanan (Hanya jika Berlangsung)
     Widget confirmButton = Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(50),
@@ -795,7 +764,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             border: Border.all(
               color: const Color(0xff4A1DFF),
               width: 1.5,
-            ), // Border Ungu
+            ),
           ),
           child: const Text(
             "Konfirmasi Pengembalian",
@@ -814,16 +783,14 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         children: [
           contactButton,
           const Gap(12),
-          confirmButton, // Tombol Konfirmasi hanya muncul di sini
+          confirmButton,
         ],
       );
     } else {
-      // Status 'Dikirim' atau 'Selesai' hanya tampil tombol Hubungi
       return contactButton;
     }
   }
 
-  // Helpers
   Widget _buildLabelValue(String label, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -832,8 +799,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           text: TextSpan(
             text: label.replaceAll('*', ''),
             style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xff838384),
+              fontSize: 14,
+              color: Color(0xff070623),
+              fontWeight: FontWeight.w700,
               fontFamily: 'Poppins',
             ),
             children: const [
@@ -849,8 +817,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           value,
           style: const TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Color(0xff070623),
+            color: Color(0xff838384),
           ),
         ),
       ],

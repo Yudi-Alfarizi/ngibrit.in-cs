@@ -19,7 +19,6 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // [FIX] Tambahkan ini agar Bottom Nav TETAP DI BAWAH saat keyboard muncul
       resizeToAvoidBottomInset: false,
 
       body: _pages[_selectedIndex],

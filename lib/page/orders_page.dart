@@ -26,8 +26,8 @@ class _OrdersPageState extends State<OrdersPage> {
     return DefaultTabController(
       length: 4,
       child: Scaffold(
-        backgroundColor: const Color(0xffF8F8FA),
-        // [FIX Poin 4] ResizeToAvoidBottomInset: false agar Bottom Nav tidak naik saat keyboard muncul
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+
         resizeToAvoidBottomInset: false,
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,18 +189,14 @@ class _OrdersPageState extends State<OrdersPage> {
           }).toList();
         }
 
-        // [FIX Poin 2B & 2C] Logic Filter Overdue
-        // Jika sedang di tab "Selesai", filter overdue diabaikan/dimatikan
         if (_isOverdueFilter && tabStatus != 'Selesai') {
           final now = DateTime.now();
           orders = orders.where((o) {
-            // [FIX 2C] Di Tab "Semua", jika status Selesai, jangan dianggap overdue
             if (o.status == 'Selesai') return false;
 
             try {
               final end = DateFormat('dd MMM yyyy').parse(o.endDate);
-              // Tambah 1 hari toleransi agar pas di hari H belum dianggap overdue, atau sesuaikan logic bisnis
-              // Di sini kita anggap overdue jika HARI INI > TANGGAL AKHIR
+
               final endDay = DateTime(end.year, end.month, end.day);
               final today = DateTime(now.year, now.month, now.day);
               return today.isAfter(endDay);
@@ -210,7 +206,6 @@ class _OrdersPageState extends State<OrdersPage> {
           }).toList();
         }
 
-        // [FIX Poin 2A] Sort by Created At (Tanggal Pesanan)
         orders.sort((a, b) {
           if (_sortOrder == 'desc') {
             return b.createdAt.compareTo(a.createdAt);
@@ -224,7 +219,6 @@ class _OrdersPageState extends State<OrdersPage> {
         }
 
         return ListView.separated(
-          // [FIX Poin 1C] Padding bawah lebih besar (120) agar item terakhir tidak tertutup bottom nav
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 120),
           itemCount: orders.length,
           separatorBuilder: (c, i) => const Gap(16),
@@ -288,8 +282,7 @@ class _OrdersPageState extends State<OrdersPage> {
                   ),
 
                   const Gap(20),
-                  // [FIX Poin 2B] Sembunyikan Opsi Overdue Filter Jika User sedang di Tab Selesai (Logic View Only)
-                  // Namun karena BottomSheet ini global, kita biarkan saja toggle-nya, tapi logic di list builder sudah menghandle pengecualiannya.
+
                   const Text(
                     "Status Waktu",
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),

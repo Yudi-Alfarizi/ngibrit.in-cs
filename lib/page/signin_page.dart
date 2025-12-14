@@ -22,16 +22,12 @@ class _SigninPageState extends State<SigninPage> {
 
     Info.showLoading(context, message: 'Loading..');
 
-    AuthSource.signIn(edtEmail.text, edtPassword.text).then((
-      message,
-    ) {
-      Info.hideLoading(); // tutup loading saat proses selesai
+    AuthSource.signIn(edtEmail.text, edtPassword.text).then((message) {
+      Info.hideLoading();
       if (message != 'scuccess') return Info.error(message);
 
-      // success
       Info.success('Sukses Masuk');
       Future.delayed(const Duration(milliseconds: 1500), () {
-        // ignore: use_build_context_synchronously
         Navigator.pushReplacementNamed(context, '/list-chat');
       });
     });

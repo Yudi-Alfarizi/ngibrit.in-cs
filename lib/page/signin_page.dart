@@ -24,11 +24,14 @@ class _SigninPageState extends State<SigninPage> {
 
     AuthSource.signIn(edtEmail.text, edtPassword.text).then((message) {
       Info.hideLoading();
-      if (message != 'scuccess') return Info.error(message);
+      
+      // [PERBAIKAN 1] Typo diperbaiki menjadi 'success'
+      if (message != 'success') return Info.error(message);
 
       Info.success('Sukses Masuk');
       Future.delayed(const Duration(milliseconds: 1500), () {
-        Navigator.pushReplacementNamed(context, '/list-chat');
+        // [PERBAIKAN 2] Rute diubah dari '/list-chat' menjadi '/main'
+        Navigator.pushReplacementNamed(context, '/main');
       });
     });
   }
@@ -81,9 +84,9 @@ class _SigninPageState extends State<SigninPage> {
             editingController: edtPassword,
             obsecure: true,
           ),
-          Gap(30),
+          const Gap(30),
           ButtonPrimary(text: 'Masuk', onTap: signIn),
-          Gap(30),
+          const Gap(30),
         ],
       ),
     );

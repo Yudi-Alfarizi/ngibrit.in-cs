@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:ngibrit_in_cs/page/list_chat_page.dart';
 import 'package:ngibrit_in_cs/page/orders_page.dart';
+import 'package:ngibrit_in_cs/page/kyc_list_page.dart'; // [BARU] Import halaman KYC
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -14,7 +15,8 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = [const ListChatPage(), const OrdersPage()];
+  // [BARU] Tambahkan KycListPage ke urutan index 2
+  final List<Widget> _pages = [const ListChatPage(), const OrdersPage(), const KycListPage()];
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +55,13 @@ class _MainPageState extends State<MainPage> {
               iconAsset: 'assets/ic_orders.png',
               iconAssetOn: 'assets/ic_orders_on.png',
             ),
+            // [BARU] Tombol Navigasi KYC (menggunakan Icon bawaan Flutter)
+            _buildNavItemIcon(
+              index: 2,
+              label: 'KYC',
+              iconData: Icons.fact_check_outlined,
+              iconDataOn: Icons.fact_check_rounded,
+            ),
             GestureDetector(
               onTap: () {
                 DSession.removeUser().then((removed) {
@@ -82,6 +91,7 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
+  // Fungsi original menggunakan Asset
   Widget _buildNavItem({
     required int index,
     required String label,
@@ -98,6 +108,48 @@ class _MainPageState extends State<MainPage> {
             isActive ? iconAssetOn : iconAsset,
             width: 24,
             height: 24,
+          ),
+          const Gap(4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              color: isActive ? const Color(0xffFFBC1C) : Colors.white,
+            ),
+          ),
+          if (isActive)
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              height: 4,
+              width: 4,
+              decoration: const BoxDecoration(
+                color: Color(0xffFF2055),
+                shape: BoxShape.circle,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // [BARU] Fungsi nav item khusus menggunakan Icon (karena Anda belum punya aset KYC)
+  Widget _buildNavItemIcon({
+    required int index,
+    required String label,
+    required IconData iconData,
+    required IconData iconDataOn,
+  }) {
+    bool isActive = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = index),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isActive ? iconDataOn : iconData,
+            size: 24,
+            color: isActive ? const Color(0xffFFBC1C) : Colors.white,
           ),
           const Gap(4),
           Text(

@@ -29,7 +29,12 @@ class MyApp extends StatelessWidget {
         future: DSession.getUser(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const CircularProgressIndicator();
+            // [FIX BUG WIDTH IS ZERO] Dibungkus dengan Scaffold & Center
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
           }
 
           if (snapshot.data == null) return const SplashScreen();
